@@ -9,12 +9,7 @@ object SanctionedPersonIndexMemoryBenchmark {
     @JvmStatic
     fun main(args: Array<String>) {
         val parser = CsvSanctionedPersonParser(
-            resourcePath = "/consolidated-screening-list.csv",
-            fullNameColumn = 5,
-            aliasesColumn = 22,
-            fieldsDelimiter = ',',
-            aliasesDelimiter = ";",
-            filterColumnAndValue = 3 to "Individual",
+            resourcePath = "/internal_list.csv",
         )
         println("🔍 Running custom benchmark for index creation...\n")
         measureUsedMemoryEagerly(parser)

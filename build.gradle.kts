@@ -30,4 +30,5 @@ java {
 
 tasks.named<Test>("test") {
     useJUnitPlatform()
+    maxHeapSize = "4g"
 }
