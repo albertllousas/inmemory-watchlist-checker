@@ -3,16 +3,20 @@ package watchlist
 import org.apache.commons.csv.CSVFormat
 import org.apache.commons.csv.CSVParser
 import java.io.InputStreamReader
+import java.time.LocalDate
 
 class CsvSanctionedPersonParser(
     private val resourcePath: String,
-    private val fullNameColumn: Int,
-    private val aliasesColumn: Int,
-    private val aliasesDelimiter: String = ";",
-    private val aliasesSurroundings: Pair<String, String>? = null,
+    private val sanctionedIdColumn: Int = 0,
+    private val entryIdColumn: Int = 1,
+    private val sourceColumn: Int = 2,
+    private val typeColumn: Int = 3,
+    private val fullNameColumn: Int = 4,
+    private val aliasColumn: Int = 5,
+    private val dobStartColumn: Int = 6,
+    private val dobEndColumn: Int = 7,
     private val filterColumnAndValue: Pair<Int, String>? = null,
-    private val fieldsDelimiter: Char = ';',
-    private val skipHeaders: Boolean = false
+    private val skipHeaders: Boolean = true
 ) {
 
     fun parse(): Sequence<SanctionedPerson> {
@@ -21,24 +25,43 @@ class CsvSanctionedPersonParser(
 
         val reader = InputStreamReader(resource)
 
-        val parser = CSVParser(reader, CSVFormat.DEFAULT)
+        val parser = CSVParser.builder()
+            .setFormat(CSVFormat.DEFAULT)
+            .setReader(reader)
+            .get()
 
-        return parser.asSequence()
+        val records = parser.asSequence()
             .drop(if (skipHeaders) 1 else 0)
-            .mapNotNull { record ->
-                if (filterColumnAndValue != null && record.get(filterColumnAndValue.first).trim() != filterColumnAndValue.second)
-                    return@mapNotNull null
-                val fullName = record.get(fullNameColumn).trim()
-                val rawAliases = record.get(aliasesColumn).trim()
-                    .let {
-                        if (aliasesSurroundings != null) it.removeSurrounding(aliasesSurroundings.first, aliasesSurroundings.second)
-                        else it
-                    }
-                val aliases = rawAliases.split(aliasesDelimiter).map { it.trim() }.filter { it.isNotEmpty() }
-                SanctionedPerson(fullName, aliases)
+            .filter { record ->
+                filterColumnAndValue == null || record.get(filterColumnAndValue.first)
+                    .trim() == filterColumnAndValue.second
             }
+            .groupBy { it.get(sanctionedIdColumn).trim() }
+
+        return records.map { (sanctionedId, records) ->
+            val entryId = records.first().get(entryIdColumn).trim()
+            val source = records.first().get(sourceColumn).trim()
+            val type = records.first().get(typeColumn).trim()
+            val fullName = records.first().get(fullNameColumn).trim()
+            val aliases = records.map { it.get(aliasColumn).trim() }.distinct()
+            val dobRanges = records.mapNotNull {
+                val dobStart = it.get(dobStartColumn).trim()
+                val dobEnd = it.get(dobEndColumn).trim()
+                if (dobStart.isNotEmpty() && dobEnd.isNotEmpty()) {
+                    DoBRange(LocalDate.parse(dobStart), LocalDate.parse(dobEnd))
+                } else {
+                    null
+                }
+            }
+            SanctionedPerson(
+                sanctionedId = sanctionedId,
+                entryId = entryId,
+                source = SanctionedPersonSource.valueOf(source),
+                type = SanctionedPersonType.valueOf(type),
+                fullName = fullName,
+                aliases = aliases,
+                dobRanges = dobRanges
+            )
+        }.asSequence()
     }
-
-
-//    private fun getColumnValue(row: List<String>, column: Int) = row.getOrNull(column)?.trim()?.removeSurrounding("\"") ?: ""
 }
